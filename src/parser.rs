@@ -46,7 +46,7 @@ impl<'a> From<nom::Err<nom::error::Error<Input<'a>>>> for ParseError<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for ParseError<'a> {
+impl std::fmt::Display for ParseError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
@@ -56,7 +56,7 @@ impl<'a> std::fmt::Display for ParseError<'a> {
     }
 }
 
-impl<'a> Error for ParseError<'a> {
+impl Error for ParseError<'_> {
     fn description(&self) -> &str {
         self.kind.description()
     }
