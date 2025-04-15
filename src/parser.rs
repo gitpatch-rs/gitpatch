@@ -7,7 +7,8 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_until},
     character::complete::{char, digit1, line_ending, none_of, not_line_ending, one_of},
-    combinator::{map, not, opt},
+    combinator::{map, map_opt, not, opt},
+    error::context,
     multi::{many0, many1},
     sequence::{delimited, preceded, terminated, tuple},
 };
@@ -95,6 +96,9 @@ fn multiple_patches(input: Input<'_>) -> IResult<Input<'_>, Vec<Patch>> {
 }
 
 fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
+    if let Ok(patch) = binary_files_differ(input) {
+        return Ok(patch);
+    }
     let (input, files) = headers(input)?;
     let (input, hunks) = chunks(input)?;
     let (input, no_newline_indicator) = no_newline_indicator(input)?;
@@ -109,6 +113,40 @@ fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
             new,
             hunks,
             end_newline: !no_newline_indicator,
+        },
+    ))
+}
+
+/// Recognize a "binary files XX and YY differ" line as an empty patch.
+fn binary_files_differ(input: Input<'_>) -> IResult<Input<'_>, Patch> {
+    // The names aren't quoted so this seems to require lookahead and then
+    // parsing the identified string.
+    let (input, (old, new)) = context(
+        "Binary file line",
+        delimited(
+            tag("Binary files "),
+            map_opt(take_until("\n"), |names: Input<'_>| {
+                names
+                    .trim_end()
+                    .strip_suffix(" differ")
+                    .and_then(|s| s.split_once(" and "))
+            }),
+            line_ending,
+        ),
+    )(input)?;
+    Ok((
+        input,
+        Patch {
+            old: File {
+                path: Cow::Borrowed(old),
+                meta: None,
+            },
+            new: File {
+                path: Cow::Borrowed(new),
+                meta: None,
+            },
+            hunks: Vec::new(),
+            end_newline: false,
         },
     ))
 }
@@ -413,7 +451,7 @@ mod tests {
         ));
 
         let sample2b = "\
---- lao	
+--- lao
 +++ tzu	\n";
         test_parser!(headers(sample2b) -> (
             File {path: "lao".into(), meta: None},
