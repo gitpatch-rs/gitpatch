@@ -1,5 +1,5 @@
 use chrono::DateTime;
-use gitpatch::{File, FileMetadata, ParseError, Patch};
+use gitpatch::{File, FileMetadata, Line, ParseError, Patch};
 
 use pretty_assertions::assert_eq;
 
@@ -367,4 +367,35 @@ Binary files old.bin and new.bin differ
     assert_eq!(patches.len(), 2);
     assert_eq!(patches[0].old.path, "before.py");
     assert_eq!(patches[1].old.path, "old.bin");
+}
+
+#[test]
+fn parses_file_renames_with_some_diff() {
+    let sample = "\
+diff --git a/src/ast.rs b/src/ast-2.rs
+similarity index 99%
+rename from src/ast.rs
+rename to src/ast-2.rs
+index d923f10..b47f160 100644
+--- a/src/ast.rs
++++ b/src/ast-2.rs
+@@ -4,6 +4,7 @@ use std::fmt;
+ use chrono::{DateTime, FixedOffset};
+ 
+ use crate::parser::{parse_multiple_patches, parse_single_patch, ParseError};
++use new_crate;
+ 
+ /// A complete patch summarizing the differences between two files
+ #[derive(Debug, Clone, Eq, PartialEq)]
+";
+
+    let patches = Patch::from_multiple(sample).unwrap();
+    assert_eq!(patches.len(), 1);
+    assert_eq!(patches[0].old.path, "a/src/ast.rs");
+    assert_eq!(patches[0].new.path, "b/src/ast-2.rs");
+
+    assert!(patches[0].hunks[0]
+        .lines
+        .iter()
+        .any(|line| matches!(line, Line::Add("use new_crate;"))));
 }
