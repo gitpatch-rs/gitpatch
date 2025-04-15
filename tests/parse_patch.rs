@@ -399,3 +399,20 @@ index d923f10..b47f160 100644
         .iter()
         .any(|line| matches!(line, Line::Add("use new_crate;"))));
 }
+
+#[test]
+fn parses_file_rename_with_100_pct_similarity() {
+    let sample = "\
+diff --git a/original-path.rs b/new-path.rs
+similarity index 100%
+rename from original-path.rs
+rename to new-path.rs
+";
+
+    let patches = Patch::from_multiple(sample).unwrap();
+
+    assert_eq!(patches.len(), 1);
+    assert_eq!(patches[0].old.path, "original-path.rs");
+    assert_eq!(patches[0].new.path, "new-path.rs");
+    assert!(patches[0].hunks.is_empty());
+}

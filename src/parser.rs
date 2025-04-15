@@ -99,6 +99,9 @@ fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
     if let Ok(patch) = binary_files_differ(input) {
         return Ok(patch);
     }
+    if let Ok(patch) = file_rename_only(input) {
+        return Ok(patch);
+    }
     let (input, files) = headers(input)?;
     let (input, hunks) = chunks(input)?;
     let (input, no_newline_indicator) = no_newline_indicator(input)?;
@@ -143,6 +146,36 @@ fn binary_files_differ(input: Input<'_>) -> IResult<Input<'_>, Patch> {
             },
             new: File {
                 path: Cow::Borrowed(new),
+                meta: None,
+            },
+            hunks: Vec::new(),
+            end_newline: false,
+        },
+    ))
+}
+
+/// Parse patches with "similarity index 100%", i.e., patches where a file is renamed without any
+/// other change in its diff.
+///
+/// The `parse` function should handle rename diffs with similary index less than 100%, at least as per the test
+/// `parses_file_renames_with_some_diff`.
+fn file_rename_only(input: Input<'_>) -> IResult<Input<'_>, Patch> {
+    let (rest, _parsed) = take_until("\nsimilarity index 100%\n")(input)?;
+    let (rest, _parsed) = tag("\nsimilarity index 100%\n")(rest)?;
+
+    let (rest, old_name) = delimited(tag("rename from "), take_until("\n"), line_ending)(rest)?;
+
+    let (rest, new_name) = delimited(tag("rename to "), take_until("\n"), line_ending)(rest)?;
+
+    Ok((
+        rest,
+        Patch {
+            old: File {
+                path: Cow::Borrowed(&old_name),
+                meta: None,
+            },
+            new: File {
+                path: Cow::Borrowed(&new_name),
                 meta: None,
             },
             hunks: Vec::new(),
