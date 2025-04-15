@@ -1,6 +1,6 @@
 [package]
 name = "gitpatch"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["vrmiguel <vrmiguel99@gmail.com>"]
 description = "Parse patches in the unified diff format"
 repository = "https://github.com/gitpatch-rs/gitpatch"
