@@ -1,4 +1,4 @@
-use patch::{File, FileMetadata, Hunk, Line, ParseError, Patch, Range};
+use gitpatch::{File, FileMetadata, Hunk, Line, ParseError, Patch, Range};
 
 use pretty_assertions::assert_eq;
 

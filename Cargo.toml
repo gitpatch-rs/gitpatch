@@ -1,9 +1,9 @@
 [package]
-name = "patch"
+name = "gitpatch"
 version = "0.7.0"
-authors = ["phil <uniphil@gmail.com>"]
+authors = ["vrmiguel <vrmiguel99@gmail.com>"]
 description = "Parse patches in the unified diff format"
-repository = "https://github.com/uniphil/patch-rs"
+repository = "https://github.com/gitpatch-rs/gitpatch"
 readme = "README.md"
 keywords = ["patch", "diff", "parse", "nom"]
 license = "MIT"

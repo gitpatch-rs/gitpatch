@@ -1,5 +1,5 @@
 use chrono::DateTime;
-use patch::{File, FileMetadata, ParseError, Patch};
+use gitpatch::{File, FileMetadata, ParseError, Patch};
 
 use pretty_assertions::assert_eq;
 

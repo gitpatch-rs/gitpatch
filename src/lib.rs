@@ -10,9 +10,9 @@
 //! ## Example
 //!
 //! ```
-//! # fn main() -> Result<(), patch::ParseError<'static>> {
-//! // Make sure you add the `patch` crate to the `[dependencies]` key of your Cargo.toml file.
-//! use patch::Patch;
+//! # fn main() -> Result<(), gitpatch::ParseError<'static>> {
+//! // Make sure you add the `gitpatch` crate to the `[dependencies]` key of your Cargo.toml file.
+//! use gitpatch::Patch;
 //!
 //! let sample = "\
 //! --- before.py

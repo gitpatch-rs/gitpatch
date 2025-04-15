@@ -1,6 +1,6 @@
 //! Demonstrates how to apply a parsed diff to a file
 
-use patch::{Line, Patch};
+use gitpatch::{Line, Patch};
 
 fn apply(diff: Patch, old: &str) -> String {
     let old_lines = old.lines().collect::<Vec<&str>>();

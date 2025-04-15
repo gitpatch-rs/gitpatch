@@ -45,8 +45,8 @@ impl<'a> Patch<'a> {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), patch::ParseError<'static>> {
-    /// # use patch::Patch;
+    /// # fn main() -> Result<(), gitpatch::ParseError<'static>> {
+    /// # use gitpatch::Patch;
     /// let sample = "\
     /// --- lao	2002-02-21 23:30:39.942229878 -0800
     /// +++ tzu	2002-02-21 23:30:50.442260588 -0800
@@ -86,8 +86,8 @@ impl<'a> Patch<'a> {
     /// # Example
     ///
     /// ```
-    /// # fn main() -> Result<(), patch::ParseError<'static>> {
-    /// # use patch::Patch;
+    /// # fn main() -> Result<(), gitpatch::ParseError<'static>> {
+    /// # use gitpatch::Patch;
     /// let sample = "\
     /// diff --git a/src/generator/place_items.rs b/src/generator/place_items.rs
     /// index 508f4e9..31a167e 100644
