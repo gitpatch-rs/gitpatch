@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::error::Error;
 
 use chrono::DateTime;
+use nom::combinator::verify;
 use nom::*;
 use nom::{
     branch::alt,
@@ -82,12 +83,14 @@ pub(crate) fn parse_single_patch(s: &str) -> Result<Patch, ParseError<'_>> {
 pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch>, ParseError<'_>> {
     let (remaining_input, patches) = multiple_patches(Input::new(s))?;
     // Parser should return an error instead of producing remaining input
-    assert!(
-        remaining_input.fragment().is_empty(),
-        "bug: failed to parse entire input. \
-        Remaining: '{}'",
-        remaining_input.fragment()
-    );
+    if !remaining_input.fragment().is_empty() {
+        return Err(ParseError {
+            line: remaining_input.location_line(),
+            offset: remaining_input.location_offset(),
+            fragment: remaining_input.fragment(),
+            kind: nom::error::ErrorKind::Eof,
+        });
+    }
     Ok(patches)
 }
 
@@ -224,9 +227,67 @@ fn chunks(input: Input<'_>) -> IResult<Input<'_>, Vec<Hunk>> {
     many1(chunk)(input)
 }
 
+fn is_next_header(input: Input<'_>) -> bool {
+    // Check for diff file header or chunk header
+    input.starts_with("diff ")
+        || input.starts_with("--- ")
+        || input.starts_with("+++ ")
+        || input.starts_with("@@ ")
+}
+
+
+/// Looks for lines starting with + or - or space, but not +++ or ---. Not a foolproof check.
+///
+/// For example, if someone deletes a line that was using the pre-decrement (--) operator or adds a
+/// line that was using the pre-increment (++) operator, this will fail.
+///
+/// Example where this doesn't work:
+///
+/// --- main.c
+/// +++ main.c
+/// @@ -1,4 +1,7 @@
+/// +#include<stdio.h>
+/// +
+///  int main() {
+///  double a;
+/// --- a;
+/// +++ a;
+/// +printf("%d\n", a);
+///  }
+///
+/// We will fail to parse this entire diff.
+///
+/// By checking for `+++ ` instead of just `+++`, we add at least a little more robustness because
+/// we know that people typically write `++a`, not `++ a`. That being said, this is still not enough
+/// to guarantee correctness in all cases.
+///
+///FIXME: Use the ranges in the chunk header to figure out how many chunk lines to parse. Will need
+/// to figure out how to count in nom more robustly than many1!(). Maybe using switch!()?
+///FIXME: The test_parse_triple_plus_minus_hack test will no longer panic when this is fixed.
 fn chunk(input: Input<'_>) -> IResult<Input<'_>, Hunk> {
     let (input, ranges) = chunk_header(input)?;
-    let (input, lines) = many1(chunk_line)(input)?;
+
+    // Parse chunk lines, using the range information to guide parsing
+    let (input, lines) = many0(verify(
+        alt((
+            // Detect added lines
+            map(
+                preceded(tuple((char('+'), not(tag("++ ")))), consume_content_line),
+                Line::Add,
+            ),
+            // Detect removed lines
+            map(
+                preceded(tuple((char('-'), not(tag("-- ")))), consume_content_line),
+                Line::Remove,
+            ),
+            // Detect context lines
+            map(preceded(char(' '), consume_content_line), Line::Context),
+            // Handle empty lines within the chunk
+            map(tag("\n"), |_| Line::Context("")),
+        )),
+        // Stop parsing when we detect the next header or have parsed the expected number of lines
+        |_| !is_next_header(input),
+    ))(input)?;
 
     let (old_range, new_range, range_hint) = ranges;
     Ok((
@@ -264,48 +325,6 @@ fn u64_digit(input: Input<'_>) -> IResult<Input<'_>, u64> {
     let (input, digits) = digit1(input)?;
     let num = digits.fragment().parse::<u64>().unwrap();
     Ok((input, num))
-}
-
-// Looks for lines starting with + or - or space, but not +++ or ---. Not a foolproof check.
-//
-// For example, if someone deletes a line that was using the pre-decrement (--) operator or adds a
-// line that was using the pre-increment (++) operator, this will fail.
-//
-// Example where this doesn't work:
-//
-// --- main.c
-// +++ main.c
-// @@ -1,4 +1,7 @@
-// +#include<stdio.h>
-// +
-//  int main() {
-//  double a;
-// --- a;
-// +++ a;
-// +printf("%d\n", a);
-//  }
-//
-// We will fail to parse this entire diff.
-//
-// By checking for `+++ ` instead of just `+++`, we add at least a little more robustness because
-// we know that people typically write `++a`, not `++ a`. That being said, this is still not enough
-// to guarantee correctness in all cases.
-//
-//FIXME: Use the ranges in the chunk header to figure out how many chunk lines to parse. Will need
-// to figure out how to count in nom more robustly than many1!(). Maybe using switch!()?
-//FIXME: The test_parse_triple_plus_minus_hack test will no longer panic when this is fixed.
-fn chunk_line(input: Input<'_>) -> IResult<Input<'_>, Line> {
-    alt((
-        map(
-            preceded(tuple((char('+'), not(tag("++ ")))), consume_content_line),
-            Line::Add,
-        ),
-        map(
-            preceded(tuple((char('-'), not(tag("-- ")))), consume_content_line),
-            Line::Remove,
-        ),
-        map(preceded(char(' '), consume_content_line), Line::Context),
-    ))(input)
 }
 
 // Trailing newline indicator
