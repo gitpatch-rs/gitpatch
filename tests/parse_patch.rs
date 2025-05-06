@@ -240,7 +240,6 @@ fn test_parse_triple_plus_minus() -> Result<(), ParseError<'static>> {
 // actually takes the hunk ranges into account, the #[should_panic] annotation should be removed.
 // See the FIXME comment on top of the chunk_line parser.
 #[test]
-#[should_panic]
 fn test_parse_triple_plus_minus_hack() {
     // Our parser has some hacky rules to make sure that lines starting with +++ or --- aren't
     // interpreted as regular addition/removal lines that could be part of a hunk. This test
