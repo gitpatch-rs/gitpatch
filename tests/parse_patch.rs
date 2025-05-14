@@ -1,5 +1,5 @@
 use chrono::DateTime;
-use gitpatch::{File, FileMetadata, Line, ParseError, Patch};
+use gitpatch::{File, FileMetadata, Line, LineKind, ParseError, Patch};
 
 use pretty_assertions::assert_eq;
 
@@ -31,7 +31,7 @@ fn test_parse() -> Result<(), ParseError<'static>> {
             meta: None
         }
     );
-    assert!(patch.end_newline_after() && patch.end_newline_after());
+    assert!(!patch.old_missing_newline && !patch.new_missing_newline);
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -67,7 +67,7 @@ fn test_parse_no_newline_indicator() -> Result<(), ParseError<'static>> {
             meta: None
         }
     );
-    assert!(!patch.end_newline_before() && !patch.end_newline_after());
+    assert!(patch.old_missing_newline && patch.new_missing_newline);
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -103,7 +103,7 @@ fn test_parse_no_newline_indicator_inside() -> Result<(), ParseError<'static>> {
             meta: None
         }
     );
-    assert!(!patch.end_newline_before() && !patch.end_newline_after());
+    assert!(patch.old_missing_newline && patch.new_missing_newline);
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -143,7 +143,7 @@ fn test_parse_timestamps() -> Result<(), ParseError<'static>> {
             )),
         }
     );
-    assert!(!patch.end_newline_after() && !patch.end_newline_before());
+    assert!(patch.old_missing_newline && patch.new_missing_newline);
 
     // to_string() uses Display but adds no trailing newline
     assert_eq!(patch.to_string(), sample);
@@ -183,7 +183,7 @@ fn test_parse_other() -> Result<(), ParseError<'static>> {
             )),
         }
     );
-    assert!(patch.end_newline_before() && patch.end_newline_after());
+    assert!(!patch.old_missing_newline && !patch.new_missing_newline);
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -220,7 +220,7 @@ fn test_parse_escaped() -> Result<(), ParseError<'static>> {
             )),
         }
     );
-    assert!(patch.end_newline_before() && patch.end_newline_after());
+    assert!(!patch.old_missing_newline && !patch.new_missing_newline);
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -262,7 +262,7 @@ fn test_parse_triple_plus_minus() -> Result<(), ParseError<'static>> {
             meta: None
         }
     );
-    assert!(patch.end_newline_before() && patch.end_newline_after());
+    assert!(!patch.old_missing_newline && !patch.new_missing_newline);
 
     assert_eq!(patch.hunks.len(), 1);
     assert_eq!(patch.hunks[0].lines.len(), 8);
@@ -314,7 +314,7 @@ fn test_parse_triple_plus_minus_hack() {
             meta: None
         }
     );
-    assert!(patch.end_newline_before() && patch.end_newline_after());
+    assert!(!patch.old_missing_newline && !patch.new_missing_newline);
 
     assert_eq!(patch.hunks.len(), 1);
     assert_eq!(patch.hunks[0].lines.len(), 8);
@@ -430,10 +430,14 @@ index d923f10..b47f160 100644
     assert_eq!(patches[0].old.path, "a/src/ast.rs");
     assert_eq!(patches[0].new.path, "b/src/ast-2.rs");
 
-    assert!(patches[0].hunks[0]
-        .lines
-        .iter()
-        .any(|line| matches!(line, Line::Add("use new_crate;", true))));
+    assert!(patches[0].hunks[0].lines.iter().any(|line| matches!(
+        line,
+        Line {
+            kind: LineKind::Add,
+            content: "use new_crate;",
+            missing_newline: false
+        }
+    )));
 }
 
 #[test]

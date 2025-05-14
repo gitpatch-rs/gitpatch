@@ -1,6 +1,6 @@
 //! Demonstrates how to apply a parsed diff to a file
 
-use gitpatch::{Line, Patch};
+use gitpatch::{LineKind, Patch};
 
 fn apply(diff: Patch, old: &str) -> String {
     let old_lines = old.lines().collect::<Vec<&str>>();
@@ -14,12 +14,12 @@ fn apply(diff: Patch, old: &str) -> String {
         }
         old_line += hunk.old_range.count;
         for line in hunk.lines {
-            match line {
-                Line::Add(s, end_newline) | Line::Context(s, end_newline) => {
-                    out.push(s);
-                    need_new_line = end_newline;
+            match line.kind {
+                LineKind::Add | LineKind::Context => {
+                    out.push(line.content);
+                    need_new_line = !line.missing_newline;
                 }
-                Line::Remove(_, _) => {}
+                LineKind::Remove => {}
             }
         }
     }
