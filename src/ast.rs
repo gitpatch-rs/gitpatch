@@ -68,7 +68,8 @@ impl<'a> Patch<'a> {
     /// let patch = Patch::from_single(sample)?;
     /// assert_eq!(&patch.old.path, "lao");
     /// assert_eq!(&patch.new.path, "tzu");
-    /// assert_eq!(patch.new_missing_newline && patch.old_missing_newline, false);
+    /// assert_eq!(patch.old_missing_newline, false);
+    /// assert_eq!(patch.new_missing_newline, true);
     /// # Ok(())
     /// # }
     /// ```
