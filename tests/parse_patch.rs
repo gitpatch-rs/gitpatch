@@ -31,7 +31,7 @@ fn test_parse() -> Result<(), ParseError<'static>> {
             meta: None
         }
     );
-    assert!(patch.end_newline);
+    assert!(patch.end_newline_after() && patch.end_newline_after());
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -67,7 +67,43 @@ fn test_parse_no_newline_indicator() -> Result<(), ParseError<'static>> {
             meta: None
         }
     );
-    assert!(!patch.end_newline);
+    assert!(!patch.end_newline_before() && !patch.end_newline_after());
+
+    assert_eq!(format!("{}\n", patch), sample);
+
+    Ok(())
+}
+
+#[test]
+fn test_parse_no_newline_indicator_inside() -> Result<(), ParseError<'static>> {
+    let sample = "\
+--- test.txt
++++ test.txt
+@@ -1,4 +1,5 @@
+ python
+ eggy
+ hamster
+-guido
+\\ No newline at end of file
++
++hello
+\\ No newline at end of file\n";
+    let patch = Patch::from_single(sample)?;
+    assert_eq!(
+        patch.old,
+        File {
+            path: "test.txt".into(),
+            meta: None
+        }
+    );
+    assert_eq!(
+        patch.new,
+        File {
+            path: "test.txt".into(),
+            meta: None
+        }
+    );
+    assert!(!patch.end_newline_before() && !patch.end_newline_after());
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -107,7 +143,7 @@ fn test_parse_timestamps() -> Result<(), ParseError<'static>> {
             )),
         }
     );
-    assert!(!patch.end_newline);
+    assert!(!patch.end_newline_after() && !patch.end_newline_before());
 
     // to_string() uses Display but adds no trailing newline
     assert_eq!(patch.to_string(), sample);
@@ -147,7 +183,7 @@ fn test_parse_other() -> Result<(), ParseError<'static>> {
             )),
         }
     );
-    assert!(patch.end_newline);
+    assert!(patch.end_newline_before() && patch.end_newline_after());
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -184,7 +220,7 @@ fn test_parse_escaped() -> Result<(), ParseError<'static>> {
             )),
         }
     );
-    assert!(patch.end_newline);
+    assert!(patch.end_newline_before() && patch.end_newline_after());
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -226,7 +262,7 @@ fn test_parse_triple_plus_minus() -> Result<(), ParseError<'static>> {
             meta: None
         }
     );
-    assert!(patch.end_newline);
+    assert!(patch.end_newline_before() && patch.end_newline_after());
 
     assert_eq!(patch.hunks.len(), 1);
     assert_eq!(patch.hunks[0].lines.len(), 8);
@@ -278,7 +314,7 @@ fn test_parse_triple_plus_minus_hack() {
             meta: None
         }
     );
-    assert!(patch.end_newline);
+    assert!(patch.end_newline_before() && patch.end_newline_after());
 
     assert_eq!(patch.hunks.len(), 1);
     assert_eq!(patch.hunks[0].lines.len(), 8);
@@ -397,7 +433,7 @@ index d923f10..b47f160 100644
     assert!(patches[0].hunks[0]
         .lines
         .iter()
-        .any(|line| matches!(line, Line::Add("use new_crate;"))));
+        .any(|line| matches!(line, Line::Add("use new_crate;", true))));
 }
 
 #[test]

@@ -11,7 +11,7 @@ fn hunk_header_context_is_not_a_line_15() -> Result<(), ParseError<'static>> {
  x
 ";
     let patch = Patch::from_single(sample)?;
-    assert_eq!(patch.hunks[0].lines, [Line::Context("x")]);
+    assert_eq!(patch.hunks[0].lines, [Line::context("x")]);
     Ok(())
 }
 
@@ -39,11 +39,11 @@ fn crlf_breaks_stuff_17() -> Result<(), ParseError<'static>> {
                 old_range: Range { start: 0, count: 0 },
                 new_range: Range { start: 0, count: 0 },
                 range_hint: "",
-                lines: vec![Line::Context("x")],
+                lines: vec![Line::context("x")],
             }],
-            end_newline: true,
         }
     );
+    assert!(patch.end_newline_before() && patch.end_newline_after());
     Ok(())
 }
 

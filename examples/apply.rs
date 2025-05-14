@@ -6,6 +6,7 @@ fn apply(diff: Patch, old: &str) -> String {
     let old_lines = old.lines().collect::<Vec<&str>>();
     let mut out: Vec<&str> = vec![];
     let mut old_line = 0;
+    let mut need_new_line = false;
     for hunk in diff.hunks {
         while old_line < hunk.old_range.start - 1 {
             out.push(old_lines[old_line as usize]);
@@ -14,12 +15,18 @@ fn apply(diff: Patch, old: &str) -> String {
         old_line += hunk.old_range.count;
         for line in hunk.lines {
             match line {
-                Line::Add(s) | Line::Context(s) => out.push(s),
-                Line::Remove(_) => {}
+                Line::Add(s, end_newline) | Line::Context(s, end_newline) => {
+                    out.push(s);
+                    need_new_line = end_newline;
+                }
+                Line::Remove(_, _) => {}
             }
         }
     }
-    out.join("\n")
+    if need_new_line {
+        out.push("");
+    }
+    out.join("")
 }
 
 static LAO: &str = "\

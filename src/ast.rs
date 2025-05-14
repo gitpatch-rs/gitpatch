@@ -14,11 +14,33 @@ pub struct Patch<'a> {
     pub new: File<'a>,
     /// hunks of differences; each hunk shows one area where the files differ
     pub hunks: Vec<Hunk<'a>>,
-    /// true if the last line of the file ends in a newline character
-    ///
-    /// This will only be false if at the end of the patch we encounter the text:
-    /// `\ No newline at end of file`
-    pub end_newline: bool,
+}
+
+impl<'a> Patch<'a> {
+    pub fn end_newline_before(&self) -> bool {
+        self.end_newline(Line::is_remove_or_context)
+    }
+
+    pub fn end_newline_after(&self) -> bool {
+        self.end_newline(Line::is_add_or_context)
+    }
+
+    fn end_newline(&self, mut line_filter: impl FnMut(&Line<'a>) -> bool) -> bool {
+        let Some(last_hunk) = self.hunks.last() else {
+            return true;
+        };
+
+        let Some(last_line) = last_hunk
+            .lines
+            .iter()
+            .filter(|&line| line_filter(line))
+            .next_back()
+        else {
+            return true;
+        };
+
+        last_line.end_newline()
+    }
 }
 
 impl fmt::Display for Patch<'_> {
@@ -30,9 +52,6 @@ impl fmt::Display for Patch<'_> {
         write!(f, "\n+++ {}", self.new)?;
         for hunk in &self.hunks {
             write!(f, "\n{}", hunk)?;
-        }
-        if !self.end_newline {
-            write!(f, "\n\\ No newline at end of file")?;
         }
         Ok(())
     }
@@ -72,7 +91,7 @@ impl<'a> Patch<'a> {
     /// let patch = Patch::from_single(sample)?;
     /// assert_eq!(&patch.old.path, "lao");
     /// assert_eq!(&patch.new.path, "tzu");
-    /// assert_eq!(patch.end_newline, false);
+    /// assert_eq!(patch.end_newline_before() && patch.end_newline_after(), false);
     /// # Ok(())
     /// # }
     /// ```
@@ -269,20 +288,55 @@ impl fmt::Display for Range {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Line<'a> {
     /// A line added to the old file in the new file
-    Add(&'a str),
+    Add(&'a str, bool),
     /// A line removed from the old file in the new file
-    Remove(&'a str),
+    Remove(&'a str, bool),
     /// A line provided for context in the diff (unchanged); from both the old and the new file
-    Context(&'a str),
+    Context(&'a str, bool),
+}
+
+impl<'a> Line<'a> {
+    pub fn add(line: &'a str) -> Self {
+        Line::Add(line, true)
+    }
+    pub fn remove(line: &'a str) -> Self {
+        Line::Remove(line, true)
+    }
+    pub fn context(line: &'a str) -> Self {
+        Line::Context(line, true)
+    }
+
+    pub fn is_add_or_context(&self) -> bool {
+        matches!(self, Line::Add(..) | Line::Context(..))
+    }
+
+    pub fn is_remove_or_context(&self) -> bool {
+        matches!(self, Line::Remove(..) | Line::Context(..))
+    }
+
+    pub fn end_newline(&self) -> bool {
+        match self {
+            Line::Add(_, end_newline) => *end_newline,
+            Line::Remove(_, end_newline) => *end_newline,
+            Line::Context(_, end_newline) => *end_newline,
+        }
+    }
 }
 
 impl fmt::Display for Line<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Line::Add(line) => write!(f, "+{}", line),
-            Line::Remove(line) => write!(f, "-{}", line),
-            Line::Context(line) => write!(f, " {}", line),
-        }
+        let (prefix, &line, &end_newline) = match self {
+            Line::Add(line, end_newline) => ("+", line, end_newline),
+            Line::Remove(line, end_newline) => ("-", line, end_newline),
+            Line::Context(line, end_newline) => (" ", line, end_newline),
+        };
+
+        write!(f, "{prefix}{line}")?;
+        if !end_newline {
+            write!(f, "\n\\ No newline at end of file")?;
+        };
+
+        Ok(())
     }
 }
 
