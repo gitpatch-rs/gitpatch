@@ -50,10 +50,7 @@ fn parse_wild_samples() {
 
         // Make sure that the patch file we produce parses to the same information as the original
         // patch file.
-        let patch_file: String = patches
-            .iter()
-            .map(|patch| format!("{}\n", patch))
-            .collect();
+        let patch_file: String = patches.iter().map(|patch| format!("{}\n", patch)).collect();
 
         let patches2 = Patch::from_multiple(&patch_file).unwrap_or_else(|err| {
             panic!(

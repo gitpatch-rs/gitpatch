@@ -235,7 +235,6 @@ fn is_next_header(input: Input<'_>) -> bool {
         || input.starts_with("@@ ")
 }
 
-
 /// Looks for lines starting with + or - or space, but not +++ or ---. Not a foolproof check.
 ///
 /// For example, if someone deletes a line that was using the pre-decrement (--) operator or adds a
