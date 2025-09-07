@@ -68,7 +68,7 @@ fn consume_content_line(input: Input<'_>) -> IResult<Input<'_>, &str> {
     Ok((input, raw.fragment()))
 }
 
-pub(crate) fn parse_single_patch(s: &str) -> Result<Patch, ParseError<'_>> {
+pub(crate) fn parse_single_patch(s: &str) -> Result<Patch<'_>, ParseError<'_>> {
     let (remaining_input, patch) = patch(Input::new(s))?;
     // Parser should return an error instead of producing remaining input
     assert!(
@@ -80,7 +80,7 @@ pub(crate) fn parse_single_patch(s: &str) -> Result<Patch, ParseError<'_>> {
     Ok(patch)
 }
 
-pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch>, ParseError<'_>> {
+pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch<'_>>, ParseError<'_>> {
     let (remaining_input, patches) = multiple_patches(Input::new(s))?;
     // Parser should return an error instead of producing remaining input
     if !remaining_input.fragment().is_empty() {
@@ -94,11 +94,11 @@ pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch>, ParseError<'
     Ok(patches)
 }
 
-fn multiple_patches(input: Input<'_>) -> IResult<Input<'_>, Vec<Patch>> {
+fn multiple_patches(input: Input) -> IResult<Input, Vec<Patch>> {
     many1(patch)(input)
 }
 
-fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
+fn patch(input: Input) -> IResult<Input, Patch> {
     if let Ok(patch) = binary_files_differ(input) {
         return Ok(patch);
     }
@@ -124,7 +124,7 @@ fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
 }
 
 /// Recognize a "binary files XX and YY differ" line as an empty patch.
-fn binary_files_differ(input: Input<'_>) -> IResult<Input<'_>, Patch> {
+fn binary_files_differ(input: Input) -> IResult<Input, Patch> {
     // The names aren't quoted so this seems to require lookahead and then
     // parsing the identified string.
     let (input, (old, new)) = context(
@@ -162,7 +162,7 @@ fn binary_files_differ(input: Input<'_>) -> IResult<Input<'_>, Patch> {
 ///
 /// The `parse` function should handle rename diffs with similary index less than 100%, at least as per the test
 /// `parses_file_renames_with_some_diff`.
-fn file_rename_only(input: Input<'_>) -> IResult<Input<'_>, Patch> {
+fn file_rename_only(input: Input<'_>) -> IResult<Input<'_>, Patch<'_>> {
     let (rest, _parsed) = take_until("\nsimilarity index 100%\n")(input)?;
     let (rest, _parsed) = tag("\nsimilarity index 100%\n")(rest)?;
 
@@ -188,7 +188,7 @@ fn file_rename_only(input: Input<'_>) -> IResult<Input<'_>, Patch> {
 }
 
 // Header lines
-fn headers(input: Input<'_>) -> IResult<Input<'_>, (File, File)> {
+fn headers(input: Input) -> IResult<Input, (File, File)> {
     // Ignore any preamble lines in produced diffs
     let (input, _) = take_until("--- ")(input)?;
     let (input, _) = tag("--- ")(input)?;
@@ -200,7 +200,7 @@ fn headers(input: Input<'_>) -> IResult<Input<'_>, (File, File)> {
     Ok((input, (oldfile, newfile)))
 }
 
-fn header_line_content(input: Input<'_>) -> IResult<Input<'_>, File> {
+fn header_line_content(input: Input) -> IResult<Input, File> {
     let (input, filename) = filename(input)?;
     let (input, after) = opt(preceded(char('\t'), file_metadata))(input)?;
 
@@ -223,7 +223,7 @@ fn header_line_content(input: Input<'_>) -> IResult<Input<'_>, File> {
 }
 
 // Hunks of the file differences
-fn chunks(input: Input<'_>) -> IResult<Input<'_>, Vec<Hunk>> {
+fn chunks(input: Input) -> IResult<Input, Vec<Hunk>> {
     many1(chunk)(input)
 }
 
@@ -263,7 +263,7 @@ fn is_next_header(input: Input<'_>) -> bool {
 ///FIXME: Use the ranges in the chunk header to figure out how many chunk lines to parse. Will need
 /// to figure out how to count in nom more robustly than many1!(). Maybe using switch!()?
 ///FIXME: The test_parse_triple_plus_minus_hack test will no longer panic when this is fixed.
-fn chunk(input: Input<'_>) -> IResult<Input<'_>, Hunk> {
+fn chunk(input: Input) -> IResult<Input, Hunk> {
     let (input, ranges) = chunk_header(input)?;
 
     // Parse chunk lines, using the range information to guide parsing
@@ -337,11 +337,11 @@ fn no_newline_indicator(input: Input<'_>) -> IResult<Input<'_>, bool> {
     )(input)
 }
 
-fn filename(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
+fn filename(input: Input) -> IResult<Input, Cow<str>> {
     alt((quoted, bare))(input)
 }
 
-fn file_metadata(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
+fn file_metadata(input: Input) -> IResult<Input, Cow<str>> {
     alt((
         quoted,
         map(not_line_ending, |data: Input<'_>| {
@@ -350,28 +350,28 @@ fn file_metadata(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
     ))(input)
 }
 
-fn quoted(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
+fn quoted(input: Input) -> IResult<Input, Cow<str>> {
     delimited(char('\"'), unescaped_str, char('\"'))(input)
 }
 
-fn bare(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
+fn bare(input: Input) -> IResult<Input, Cow<str>> {
     map(is_not("\t\r\n"), |data: Input<'_>| {
         Cow::Borrowed(*data.fragment())
     })(input)
 }
 
-fn unescaped_str(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
+fn unescaped_str(input: Input) -> IResult<Input, Cow<str>> {
     let (input, raw) = many1(alt((unescaped_char, escaped_char)))(input)?;
     Ok((input, raw.into_iter().collect::<Cow<str>>()))
 }
 
 // Parses an unescaped character
-fn unescaped_char(input: Input<'_>) -> IResult<Input<'_>, char> {
+fn unescaped_char(input: Input) -> IResult<Input, char> {
     none_of("\0\n\r\t\\\"")(input)
 }
 
 // Parses an escaped character and returns its unescaped equivalent
-fn escaped_char(input: Input<'_>) -> IResult<Input<'_>, char> {
+fn escaped_char(input: Input) -> IResult<Input, char> {
     map(preceded(char('\\'), one_of(r#"0nrt"\"#)), |ch| match ch {
         '0' => '\0',
         'n' => '\n',
