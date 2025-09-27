@@ -47,3 +47,22 @@ fn parse_samples() {
 fn parse_wild_samples() {
     visit_patches("wild-samples", "patch", verify_patch_roundtrip);
 }
+
+fn expect_parse_failure(data: &str, path: &PathBuf) {
+    println!("Expecting failure reading {:?}", path);
+    assert!(
+        Patch::from_multiple(data).is_err(),
+        "Expected failure parsing {:?}.  Has this been fixed?  \
+         Consider moving it to wild-samples for full regression test",
+        path
+    );
+}
+
+// We have a zoo of known failing examples in wild-samples-fail.
+//
+// If we fix the underlying problem, this test will start to FAIL and patches
+// should be migrated out of the failing list to the wild-samples collection.
+#[test]
+fn parse_failing_wild_samples() {
+    visit_patches("wild-samples-fail", "patch", expect_parse_failure);
+}

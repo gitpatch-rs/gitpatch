@@ -1,0 +1,74 @@
+diff --cc src/parser.rs
+index cfc5da4,ac7ada2..0000000
+--- a/src/parser.rs
++++ b/src/parser.rs
+@@@ -104,15 -95,13 +104,22 @@@ fn multiple_patches(input: Input) -> IR
+      many1(patch)(input)
+  }
+  
+++<<<<<<< HEAD
+ +fn patch(input: Input) -> IResult<Input, Patch> {
+ +    if let Ok(patch) = binary_files_differ(input) {
+ +        return Ok(patch);
+ +    }
+ +    if let Ok(patch) = file_rename_only(input) {
+ +        return Ok(patch);
+ +    }
+++=======
++ fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
++     if let Ok(patch) = binary_files_differ(input) {
++         return Ok(patch);
++     }
+++>>>>>>> 0b90edb (Handle "Binary files differ" lines)
+      let (input, files) = headers(input)?;
+      let (input, hunks) = chunks(input)?;
+ -    let (input, no_newline_indicator) = no_newline_indicator(input)?;
+      // Ignore trailing empty lines produced by some diff programs
+      let (input, _) = many0(line_ending)(input)?;
+  
+@@@ -200,10 -117,43 +207,43 @@@ fn file_rename_only(input: Input<'_>) -
+      ))
+  }
+  
++ /// Recognize a "binary files XX and YY differ" line as an empty patch.
++ fn binary_files_differ(input: Input<'_>) -> IResult<Input<'_>, Patch> {
++     // let (input, _) = context("Binary file line", tag("Binary files "))(input)?;
++     // The names aren't quoted so this seems to require lookahead and then
++     // parsing the identified string.
++     let (input, (old, new)) = context(
++         "Binary file line",
++         delimited(
++             tag("Binary files "),
++             map_opt(take_until(" differ\n"), |names: Input<'_>| {
++                 names.split_once(" and ")
++             }),
++             pair(tag(" differ"), line_ending),
++         ),
++     )(input)?;
++     dbg!(&old, &new);
++     Ok((
++         input,
++         Patch {
++             old: File {
++                 path: Cow::Borrowed(old),
++                 meta: None,
++             },
++             new: File {
++                 path: Cow::Borrowed(new),
++                 meta: None,
++             },
++             hunks: Vec::new(),
++             end_newline: false,
++         },
++     ))
++ }
++ 
+  // Header lines
+ -fn headers(input: Input<'_>) -> IResult<Input<'_>, (File, File)> {
+ +fn headers(input: Input) -> IResult<Input, (File, File)> {
+      // Ignore any preamble lines in produced diffs
+ -    let (input, _) = take_until("---")(input)?;
+ +    let (input, _) = take_until("--- ")(input)?;
+      let (input, _) = tag("--- ")(input)?;
+      let (input, oldfile) = header_line_content(input)?;
+      let (input, _) = line_ending(input)?;
