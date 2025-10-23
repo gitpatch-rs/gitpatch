@@ -5,15 +5,33 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  # allow manual trigger
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: Build and test for ${{matrix.rust}} on ${{matrix.os}}
+    runs-on: ${{matrix.os}}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust:
+          - 1.84.1 # pre edition2024
+          - 1.87
+          - stable
     steps:
     - uses: actions/checkout@v2
+
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: ${{matrix.rust}}
+        override: true
+
     - name: Build lib
       run: cargo build --verbose
     - name: Run tests
@@ -22,13 +40,22 @@ jobs:
       run: cargo build --example '*'
 
   style:
-    runs-on: ubuntu-latest
+    name: Style checks for ${{matrix.rust}} on ${{matrix.os}}
+    runs-on: ${{matrix.os}}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust:
+          - 1.84.1 # pre edition2024
+          - 1.87   # clippy became more picky after this
+          - stable
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: ${{matrix.rust}}
           override: true
           components: rustfmt, clippy
       - name: fmt
