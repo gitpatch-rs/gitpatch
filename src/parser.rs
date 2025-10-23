@@ -360,18 +360,7 @@ fn u64_digit(input: Input<'_>) -> IResult<Input<'_>, u64> {
     Ok((input, num))
 }
 
-// Trailing newline indicator
-fn no_newline_indicator(input: Input<'_>) -> IResult<Input<'_>, bool> {
-    map(
-        opt(terminated(
-            tag("\\ No newline at end of file"),
-            opt(line_ending),
-        )),
-        |matched| matched.is_some(),
-    )(input)
-}
-
-fn filename(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
+fn filename(input: Input<'_>) -> IResult<Input<'_>, Cow<'_, str>> {
     alt((quoted, bare))(input)
 }
 
