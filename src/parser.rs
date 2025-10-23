@@ -63,9 +63,15 @@ impl Error for ParseError<'_> {
     }
 }
 
-fn consume_content_line(input: Input<'_>) -> IResult<Input<'_>, &str> {
+fn consume_content_line(input: Input<'_>) -> IResult<Input<'_>, (&str, bool)> {
     let (input, raw) = terminated(not_line_ending, line_ending)(input)?;
-    Ok((input, raw.fragment()))
+
+    let (input, missing_newline) = opt(terminated(
+        tag("\\ No newline at end of file"),
+        opt(line_ending),
+    ))(input)?;
+
+    Ok((input, (raw.fragment(), missing_newline.is_some())))
 }
 
 pub(crate) fn parse_single_patch(s: &str) -> Result<Patch<'_>, ParseError<'_>> {
@@ -107,9 +113,13 @@ fn patch(input: Input) -> IResult<Input, Patch> {
     }
     let (input, files) = headers(input)?;
     let (input, hunks) = chunks(input)?;
-    let (input, no_newline_indicator) = no_newline_indicator(input)?;
     // Ignore trailing empty lines produced by some diff programs
     let (input, _) = many0(line_ending)(input)?;
+
+    let (old_missing_newline, new_missing_newline) = hunks
+        .last()
+        .map(|hunk| (hunk.old_missing_newline, hunk.new_missing_newline))
+        .unwrap_or((false, false));
 
     let (old, new) = files;
     Ok((
@@ -118,7 +128,8 @@ fn patch(input: Input) -> IResult<Input, Patch> {
             old,
             new,
             hunks,
-            end_newline: !no_newline_indicator,
+            old_missing_newline,
+            new_missing_newline,
         },
     ))
 }
@@ -152,7 +163,8 @@ fn binary_files_differ(input: Input) -> IResult<Input, Patch> {
                 meta: None,
             },
             hunks: Vec::new(),
-            end_newline: false,
+            old_missing_newline: false,
+            new_missing_newline: false,
         },
     ))
 }
@@ -182,7 +194,8 @@ fn file_rename_only(input: Input<'_>) -> IResult<Input<'_>, Patch<'_>> {
                 meta: None,
             },
             hunks: Vec::new(),
-            end_newline: false,
+            old_missing_newline: false,
+            new_missing_newline: false,
         },
     ))
 }
@@ -272,21 +285,40 @@ fn chunk(input: Input) -> IResult<Input, Hunk> {
             // Detect added lines
             map(
                 preceded(tuple((char('+'), not(tag("++ ")))), consume_content_line),
-                Line::Add,
+                |(line, missing_newline)| LineKind::Add.to_line_full(line, missing_newline),
             ),
             // Detect removed lines
             map(
                 preceded(tuple((char('-'), not(tag("-- ")))), consume_content_line),
-                Line::Remove,
+                |(line, missing_newline)| LineKind::Remove.to_line_full(line, missing_newline),
             ),
             // Detect context lines
-            map(preceded(char(' '), consume_content_line), Line::Context),
+            map(
+                preceded(char(' '), consume_content_line),
+                |(line, missing_newline)| LineKind::Context.to_line_full(line, missing_newline),
+            ),
             // Handle empty lines within the chunk
-            map(tag("\n"), |_| Line::Context("")),
+            map(tag("\n"), |_| LineKind::Context.to_line_full("", false)),
         )),
         // Stop parsing when we detect the next header or have parsed the expected number of lines
         |_| !is_next_header(input),
     ))(input)?;
+
+    // Track whether the last line for each side of the hunk is missing a final newline
+    let mut new_missing_newline = false;
+    let mut old_missing_newline = false;
+    for line in &lines {
+        let is_new = matches!(line.kind, LineKind::Add | LineKind::Context);
+        let is_old = matches!(line.kind, LineKind::Remove | LineKind::Context);
+
+        if is_new {
+            new_missing_newline = line.missing_newline;
+        }
+
+        if is_old {
+            old_missing_newline = line.missing_newline;
+        }
+    }
 
     let (old_range, new_range, range_hint) = ranges;
     Ok((
@@ -296,6 +328,8 @@ fn chunk(input: Input) -> IResult<Input, Hunk> {
             new_range,
             range_hint,
             lines,
+            old_missing_newline,
+            new_missing_newline,
         },
     ))
 }
@@ -326,18 +360,7 @@ fn u64_digit(input: Input<'_>) -> IResult<Input<'_>, u64> {
     Ok((input, num))
 }
 
-// Trailing newline indicator
-fn no_newline_indicator(input: Input<'_>) -> IResult<Input<'_>, bool> {
-    map(
-        opt(terminated(
-            tag("\\ No newline at end of file"),
-            opt(line_ending),
-        )),
-        |matched| matched.is_some(),
-    )(input)
-}
-
-fn filename(input: Input) -> IResult<Input, Cow<str>> {
+fn filename(input: Input<'_>) -> IResult<Input<'_>, Cow<'_, str>> {
     alt((quoted, bare))(input)
 }
 
@@ -582,16 +605,18 @@ mod tests {
             old_range: Range { start: 1, count: 7 },
             new_range: Range { start: 1, count: 6 },
             range_hint: "",
+            old_missing_newline: false,
+            new_missing_newline: false,
             lines: vec![
-                Line::Remove("The Way that can be told of is not the eternal Way;"),
-                Line::Remove("The name that can be named is not the eternal name."),
-                Line::Context("The Nameless is the origin of Heaven and Earth;"),
-                Line::Remove("The Named is the mother of all things."),
-                Line::Add("The named is the mother of all things."),
-                Line::Add(""),
-                Line::Context("Therefore let there always be non-being,"),
-                Line::Context("  so we may see their subtlety,"),
-                Line::Context("And let there always be being,"),
+                LineKind::Remove.to_line("The Way that can be told of is not the eternal Way;"),
+                LineKind::Remove.to_line("The name that can be named is not the eternal name."),
+                LineKind::Context.to_line("The Nameless is the origin of Heaven and Earth;"),
+                LineKind::Remove.to_line("The Named is the mother of all things."),
+                LineKind::Add.to_line("The named is the mother of all things."),
+                LineKind::Add.to_line(""),
+                LineKind::Context.to_line("Therefore let there always be non-being,"),
+                LineKind::Context.to_line("  so we may see their subtlety,"),
+                LineKind::Context.to_line("And let there always be being,"),
             ],
         };
         test_parser!(chunk(sample) -> expected);
@@ -635,38 +660,46 @@ mod tests {
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").unwrap(),
                 )),
             },
+            old_missing_newline: false,
+            new_missing_newline: false,
             hunks: vec![
                 Hunk {
                     old_range: Range { start: 1, count: 7 },
                     new_range: Range { start: 1, count: 6 },
                     range_hint: "",
+                    old_missing_newline: false,
+                    new_missing_newline: false,
                     lines: vec![
-                        Line::Remove("The Way that can be told of is not the eternal Way;"),
-                        Line::Remove("The name that can be named is not the eternal name."),
-                        Line::Context("The Nameless is the origin of Heaven and Earth;"),
-                        Line::Remove("The Named is the mother of all things."),
-                        Line::Add("The named is the mother of all things."),
-                        Line::Add(""),
-                        Line::Context("Therefore let there always be non-being,"),
-                        Line::Context("  so we may see their subtlety,"),
-                        Line::Context("And let there always be being,"),
+                        LineKind::Remove
+                            .to_line("The Way that can be told of is not the eternal Way;"),
+                        LineKind::Remove
+                            .to_line("The name that can be named is not the eternal name."),
+                        LineKind::Context
+                            .to_line("The Nameless is the origin of Heaven and Earth;"),
+                        LineKind::Remove.to_line("The Named is the mother of all things."),
+                        LineKind::Add.to_line("The named is the mother of all things."),
+                        LineKind::Add.to_line(""),
+                        LineKind::Context.to_line("Therefore let there always be non-being,"),
+                        LineKind::Context.to_line("  so we may see their subtlety,"),
+                        LineKind::Context.to_line("And let there always be being,"),
                     ],
                 },
                 Hunk {
                     old_range: Range { start: 9, count: 3 },
                     new_range: Range { start: 8, count: 6 },
                     range_hint: "",
+                    old_missing_newline: false,
+                    new_missing_newline: false,
                     lines: vec![
-                        Line::Context("The two are the same,"),
-                        Line::Context("But after they are produced,"),
-                        Line::Context("  they have different names."),
-                        Line::Add("They both may be called deep and profound."),
-                        Line::Add("Deeper and more profound,"),
-                        Line::Add("The door of all subtleties!"),
+                        LineKind::Context.to_line("The two are the same,"),
+                        LineKind::Context.to_line("But after they are produced,"),
+                        LineKind::Context.to_line("  they have different names."),
+                        LineKind::Add.to_line("They both may be called deep and profound."),
+                        LineKind::Add.to_line("Deeper and more profound,"),
+                        LineKind::Add.to_line("The door of all subtleties!"),
                     ],
                 },
             ],
-            end_newline: true,
         };
 
         test_parser!(patch(sample) -> expected);

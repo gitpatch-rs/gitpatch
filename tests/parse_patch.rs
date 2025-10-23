@@ -1,5 +1,5 @@
 use chrono::DateTime;
-use gitpatch::{File, FileMetadata, Line, ParseError, Patch};
+use gitpatch::{File, FileMetadata, Line, LineKind, ParseError, Patch};
 
 use pretty_assertions::assert_eq;
 
@@ -31,7 +31,7 @@ fn test_parse() -> Result<(), ParseError<'static>> {
             meta: None
         }
     );
-    assert!(patch.end_newline);
+    assert!(!patch.old_missing_newline && !patch.new_missing_newline);
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -41,35 +41,78 @@ fn test_parse() -> Result<(), ParseError<'static>> {
 #[test]
 fn test_parse_no_newline_indicator() -> Result<(), ParseError<'static>> {
     let sample = "\
---- before.py
-+++ after.py
-@@ -1,4 +1,4 @@
--bacon
--eggs
--ham
-+python
-+eggy
-+hamster
- guido
+--- a/bar.txt
++++ b/bar.txt
+@@ -1,3 +1,3 @@
+ bar
+ Bar
+-BAR
++BAR
+\\ No newline at end of file
+--- a/baz.txt
++++ b/baz.txt
+@@ -1,3 +1,3 @@
+ baz
+ Baz
+-BAZ
+\\ No newline at end of file
++ZAB
+\\ No newline at end of file
+--- a/foo.txt
++++ b/foo.txt
+@@ -1,3 +1,3 @@
+ foo
+ Foo
+-FOO
+\\ No newline at end of file
++FOO
+--- a/foobar.txt
++++ b/foobar.txt
+@@ -1,3 +1,3 @@
+ foobar
+-FooBar
++BarFoo
+ FOOBAR
 \\ No newline at end of file\n";
-    let patch = Patch::from_single(sample)?;
-    assert_eq!(
-        patch.old,
-        File {
-            path: "before.py".into(),
-            meta: None
-        }
-    );
-    assert_eq!(
-        patch.new,
-        File {
-            path: "after.py".into(),
-            meta: None
-        }
-    );
-    assert!(!patch.end_newline);
+    let patches = Patch::from_multiple(sample)?;
 
-    assert_eq!(format!("{}\n", patch), sample);
+    assert_eq!(patches.len(), 4);
+
+    assert_eq!(patches[0].old.path, "a/bar.txt");
+    assert_eq!(patches[0].new.path, "b/bar.txt");
+    assert_eq!(patches[0].hunks.len(), 1);
+    assert_eq!(patches[0].hunks[0].lines.len(), 4);
+    assert_eq!(patches[0].old_missing_newline, false);
+    assert_eq!(patches[0].new_missing_newline, true);
+
+    assert_eq!(patches[1].old.path, "a/baz.txt");
+    assert_eq!(patches[1].new.path, "b/baz.txt");
+    assert_eq!(patches[1].hunks.len(), 1);
+    assert_eq!(patches[1].hunks[0].lines.len(), 4);
+    assert_eq!(patches[1].old_missing_newline, true);
+    assert_eq!(patches[1].new_missing_newline, true);
+
+    assert_eq!(patches[2].old.path, "a/foo.txt");
+    assert_eq!(patches[2].new.path, "b/foo.txt");
+    assert_eq!(patches[2].hunks.len(), 1);
+    assert_eq!(patches[2].hunks[0].lines.len(), 4);
+    assert_eq!(patches[2].old_missing_newline, true);
+    assert_eq!(patches[2].new_missing_newline, false);
+
+    assert_eq!(patches[3].old.path, "a/foobar.txt");
+    assert_eq!(patches[3].new.path, "b/foobar.txt");
+    assert_eq!(patches[3].hunks.len(), 1);
+    assert_eq!(patches[3].hunks[0].lines.len(), 4);
+    assert_eq!(patches[3].old_missing_newline, true);
+    assert_eq!(patches[3].new_missing_newline, true);
+
+    assert_eq!(
+        patches
+            .iter()
+            .map(|patch| format!("{}\n", patch))
+            .collect::<String>(),
+        sample
+    );
 
     Ok(())
 }
@@ -107,7 +150,7 @@ fn test_parse_timestamps() -> Result<(), ParseError<'static>> {
             )),
         }
     );
-    assert!(!patch.end_newline);
+    assert!(patch.old_missing_newline && patch.new_missing_newline);
 
     // to_string() uses Display but adds no trailing newline
     assert_eq!(patch.to_string(), sample);
@@ -147,7 +190,7 @@ fn test_parse_other() -> Result<(), ParseError<'static>> {
             )),
         }
     );
-    assert!(patch.end_newline);
+    assert!(!patch.old_missing_newline && !patch.new_missing_newline);
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -184,7 +227,7 @@ fn test_parse_escaped() -> Result<(), ParseError<'static>> {
             )),
         }
     );
-    assert!(patch.end_newline);
+    assert!(!patch.old_missing_newline && !patch.new_missing_newline);
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -226,7 +269,7 @@ fn test_parse_triple_plus_minus() -> Result<(), ParseError<'static>> {
             meta: None
         }
     );
-    assert!(patch.end_newline);
+    assert!(!patch.old_missing_newline && !patch.new_missing_newline);
 
     assert_eq!(patch.hunks.len(), 1);
     assert_eq!(patch.hunks[0].lines.len(), 8);
@@ -278,7 +321,7 @@ fn test_parse_triple_plus_minus_hack() {
             meta: None
         }
     );
-    assert!(patch.end_newline);
+    assert!(!patch.old_missing_newline && !patch.new_missing_newline);
 
     assert_eq!(patch.hunks.len(), 1);
     assert_eq!(patch.hunks[0].lines.len(), 8);
@@ -394,10 +437,14 @@ index d923f10..b47f160 100644
     assert_eq!(patches[0].old.path, "a/src/ast.rs");
     assert_eq!(patches[0].new.path, "b/src/ast-2.rs");
 
-    assert!(patches[0].hunks[0]
-        .lines
-        .iter()
-        .any(|line| matches!(line, Line::Add("use new_crate;"))));
+    assert!(patches[0].hunks[0].lines.iter().any(|line| matches!(
+        line,
+        Line {
+            kind: LineKind::Add,
+            content: "use new_crate;",
+            missing_newline: false
+        }
+    )));
 }
 
 #[test]

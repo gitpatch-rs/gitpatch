@@ -1,4 +1,4 @@
-use gitpatch::{File, FileMetadata, Hunk, Line, ParseError, Patch, Range};
+use gitpatch::{File, FileMetadata, Hunk, LineKind, ParseError, Patch, Range};
 
 use pretty_assertions::assert_eq;
 
@@ -11,7 +11,7 @@ fn hunk_header_context_is_not_a_line_15() -> Result<(), ParseError<'static>> {
  x
 ";
     let patch = Patch::from_single(sample)?;
-    assert_eq!(patch.hunks[0].lines, [Line::Context("x")]);
+    assert_eq!(patch.hunks[0].lines, [LineKind::Context.to_line("x")]);
     Ok(())
 }
 
@@ -35,13 +35,16 @@ fn crlf_breaks_stuff_17() -> Result<(), ParseError<'static>> {
                 path: "new.txt".into(),
                 meta: None
             },
+            old_missing_newline: false,
+            new_missing_newline: false,
             hunks: vec![Hunk {
                 old_range: Range { start: 0, count: 0 },
                 new_range: Range { start: 0, count: 0 },
                 range_hint: "",
-                lines: vec![Line::Context("x")],
+                old_missing_newline: false,
+                new_missing_newline: false,
+                lines: vec![LineKind::Context.to_line("x")],
             }],
-            end_newline: true,
         }
     );
     Ok(())

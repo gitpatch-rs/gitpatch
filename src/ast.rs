@@ -12,13 +12,12 @@ pub struct Patch<'a> {
     pub old: File<'a>,
     /// The file information of the `+` side of the diff, line prefix: `+++`
     pub new: File<'a>,
+    /// If there was a `No newline at end of file` indicator after the last line of the old version of the file
+    pub old_missing_newline: bool,
+    /// If there was a `No newline at end of file` indicator after the last line of the new version of the file
+    pub new_missing_newline: bool,
     /// hunks of differences; each hunk shows one area where the files differ
     pub hunks: Vec<Hunk<'a>>,
-    /// true if the last line of the file ends in a newline character
-    ///
-    /// This will only be false if at the end of the patch we encounter the text:
-    /// `\ No newline at end of file`
-    pub end_newline: bool,
 }
 
 impl fmt::Display for Patch<'_> {
@@ -30,9 +29,6 @@ impl fmt::Display for Patch<'_> {
         write!(f, "\n+++ {}", self.new)?;
         for hunk in &self.hunks {
             write!(f, "\n{}", hunk)?;
-        }
-        if !self.end_newline {
-            write!(f, "\n\\ No newline at end of file")?;
         }
         Ok(())
     }
@@ -72,7 +68,8 @@ impl<'a> Patch<'a> {
     /// let patch = Patch::from_single(sample)?;
     /// assert_eq!(&patch.old.path, "lao");
     /// assert_eq!(&patch.new.path, "tzu");
-    /// assert_eq!(patch.end_newline, false);
+    /// assert_eq!(patch.old_missing_newline, false);
+    /// assert_eq!(patch.new_missing_newline, true);
     /// # Ok(())
     /// # }
     /// ```
@@ -218,6 +215,10 @@ pub struct Hunk<'a> {
     pub new_range: Range,
     /// Any trailing text after the hunk's range information
     pub range_hint: &'a str,
+    /// If there was a `No newline at end of file` indicator after the last line of the old version of the hunk
+    pub old_missing_newline: bool,
+    /// If there was a `No newline at end of file` indicator after the last line of the new version of the hunk
+    pub new_missing_newline: bool,
     /// Each line of text in the hunk, prefixed with the type of change it represents
     pub lines: Vec<Line<'a>>,
 }
@@ -265,24 +266,60 @@ impl fmt::Display for Range {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineKind {
+    /// A line added to the old file in the new file
+    Add,
+    /// A line removed from the old file in the new file
+    Remove,
+    /// A line provided for context in the diff (unchanged); from both the old and the new file
+    Context,
+}
+
+impl LineKind {
+    pub fn to_line_full(self, line: &str, missing_newline: bool) -> Line<'_> {
+        Line {
+            kind: self,
+            content: line,
+            missing_newline,
+        }
+    }
+
+    pub fn to_line(self, line: &str) -> Line<'_> {
+        Line {
+            kind: self,
+            content: line,
+            missing_newline: false,
+        }
+    }
+}
+
 /// A line of the old file, new file, or both
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Line<'a> {
-    /// A line added to the old file in the new file
-    Add(&'a str),
-    /// A line removed from the old file in the new file
-    Remove(&'a str),
-    /// A line provided for context in the diff (unchanged); from both the old and the new file
-    Context(&'a str),
+pub struct Line<'a> {
+    /// The kind of the line (added, removed, or context)
+    pub kind: LineKind,
+    /// The actual text of the line
+    pub content: &'a str,
+    /// If there was a `No newline at end of file` indicator after the line
+    pub missing_newline: bool,
 }
 
 impl fmt::Display for Line<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Line::Add(line) => write!(f, "+{}", line),
-            Line::Remove(line) => write!(f, "-{}", line),
-            Line::Context(line) => write!(f, " {}", line),
-        }
+        let prefix = match self.kind {
+            LineKind::Add => "+",
+            LineKind::Remove => "-",
+            LineKind::Context => " ",
+        };
+
+        write!(f, "{}{}", prefix, self.content)?;
+
+        if self.missing_newline {
+            write!(f, "\n\\ No newline at end of file")?;
+        };
+
+        Ok(())
     }
 }
 
@@ -297,9 +334,11 @@ mod tests {
             old_range: Range { start: 0, count: 0 },
             new_range: Range { start: 0, count: 0 },
             range_hint: "",
+            old_missing_newline: false,
+            new_missing_newline: false,
             lines: vec![],
         };
-        for (input, expected) in vec![
+        for (input, expected) in [
             ("", None),
             (" ", None),
             ("  ", None),
