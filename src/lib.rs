@@ -44,6 +44,7 @@
 //! [spec]: http://www.artima.com/weblogs/viewpost.jsp?thread=164293
 
 #![deny(unused_must_use)]
+#![allow(clippy::format_collect)]
 
 mod ast;
 mod parser;

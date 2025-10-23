@@ -338,7 +338,7 @@ mod tests {
             new_missing_newline: false,
             lines: vec![],
         };
-        for (input, expected) in vec![
+        for (input, expected) in [
             ("", None),
             (" ", None),
             ("  ", None),
