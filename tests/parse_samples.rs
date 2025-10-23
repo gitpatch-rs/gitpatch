@@ -46,9 +46,10 @@ fn parse_wild_samples() {
         }
 
         let data = fs::read_to_string(dbg!(&path)).unwrap();
-        let patches = Patch::from_multiple(&data)
-            .unwrap_or_else(|err| panic!("failed to parse {:?}, error: {}", path, err));
+        let patches = Patch::from_multiple(&data);
 
+        println!("Patches: {:?}", patches);
+        let patches = patches.unwrap_or_else(|err| panic!("failed to parse {:?}, error: {}", path, err));
         // Make sure that the patch file we produce parses to the same information as the original
         // patch file.
         #[allow(clippy::format_collect)] // Display::fmt is the only way to resolve Patch->str

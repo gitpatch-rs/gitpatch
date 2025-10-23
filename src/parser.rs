@@ -3,6 +3,7 @@ use std::error::Error;
 
 use chrono::DateTime;
 use nom::combinator::verify;
+use nom::complete::take;
 use nom::*;
 use nom::{
     branch::alt,
@@ -263,32 +264,21 @@ fn is_next_header(input: Input<'_>) -> bool {
 ///FIXME: Use the ranges in the chunk header to figure out how many chunk lines to parse. Will need
 /// to figure out how to count in nom more robustly than many1!(). Maybe using switch!()?
 ///FIXME: The test_parse_triple_plus_minus_hack test will no longer panic when this is fixed.
-fn chunk(input: Input) -> IResult<Input, Hunk> {
+fn chunk(input: Input) -> IResult<Input, Hunk> { 
+    // First, parse the chunk header to get range information
     let (input, ranges) = chunk_header(input)?;
-
-    // Parse chunk lines, using the range information to guide parsing
-    let (input, lines) = many0(verify(
-        alt((
-            // Detect added lines
-            map(
-                preceded(tuple((char('+'), not(tag("++ ")))), consume_content_line),
-                Line::Add,
-            ),
-            // Detect removed lines
-            map(
-                preceded(tuple((char('-'), not(tag("-- ")))), consume_content_line),
-                Line::Remove,
-            ),
-            // Detect context lines
-            map(preceded(char(' '), consume_content_line), Line::Context),
-            // Handle empty lines within the chunk
-            map(tag("\n"), |_| Line::Context("")),
-        )),
-        // Stop parsing when we detect the next header or have parsed the expected number of lines
-        |_| !is_next_header(input),
-    ))(input)?;
-
     let (old_range, new_range, range_hint) = ranges;
+
+    // Calculate total expected lines
+    let total_context = old_range.count;
+    let total_added = new_range.count;
+
+    let (input, lines) = parse_hunk_lines(
+        input,
+        old_range.count as usize,
+        new_range.count as usize,
+    )?;
+
     Ok((
         input,
         Hunk {
@@ -298,6 +288,86 @@ fn chunk(input: Input) -> IResult<Input, Hunk> {
             lines,
         },
     ))
+}
+
+fn parse_hunk_lines<'a>(
+    mut input: Input<'a>,
+    old_count: usize,
+    new_count: usize,
+) -> IResult<Input<'a>, Vec<Line<'a>>> {
+    use nom::{
+        branch::alt,
+        bytes::complete::tag,
+        character::complete::{char, line_ending, not_line_ending},
+        combinator::{map, opt},
+        sequence::preceded,
+        IResult,
+    };
+
+    enum LineKind<'b> {
+        Add(&'b str),
+        Remove(&'b str),
+        Context(&'b str),
+        EmptyContext,
+    }
+
+    let mut lines = Vec::new();
+    let mut context = 0;
+    let mut added = 0;
+    let mut removed = 0;
+
+    while context + removed < old_count || context + added < new_count {
+        let (rest, kind) = alt((
+            // +added line
+            map(preceded(char('+'), not_line_ending), |s: Input<'a>| LineKind::Add(*s.fragment())),
+            // -removed line
+            map(preceded(char('-'), not_line_ending), |s: Input<'a>| LineKind::Remove(*s.fragment())),
+            // ' ' context line (possibly empty after the space)
+            map(preceded(char(' '), opt(not_line_ending)), |opt_s: Option<Input<'a>>| {
+                LineKind::Context(opt_s.map(|s| *s.fragment()).unwrap_or(""))
+            }),
+            // bare newline (no prefix at all) = empty context line
+            map(line_ending, |_| LineKind::EmptyContext),
+        ))(input)?;
+
+        // For all but EmptyContext, consume the line ending
+
+        let (rest, _) = match &kind {
+            LineKind::EmptyContext => (rest, ()), // already consumed
+            _ => {
+                let (rest, _) = line_ending(rest)?;
+                (rest, ())
+            }
+        };
+        // Update counters and build Line
+        let line = match kind {
+            LineKind::Add(s) => {
+                added += 1;
+                Line::Add(s)
+            }
+            LineKind::Remove(s) => {
+                removed += 1;
+                Line::Remove(s)
+            }
+            LineKind::Context(s) => {
+                context += 1;
+                Line::Context(s)
+            }
+            LineKind::EmptyContext => {
+                context += 1;
+                Line::Context("")
+            }
+        };
+
+        lines.push(line);
+        input = rest;
+
+        if context + removed == old_count && context + added == new_count {
+            break;
+        }
+    }
+
+    Ok((input, lines))
 }
 
 fn chunk_header(input: Input<'_>) -> IResult<Input<'_>, (Range, Range, &'_ str)> {
