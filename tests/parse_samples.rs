@@ -20,6 +20,7 @@ fn parse_samples() {
 
         // Make sure that the patch file we produce parses to the same information as the original
         // patch file.
+        #[allow(clippy::format_collect)] // Display::fmt is the only way to resolve Patch->str
         let patch_file: String = patches.iter().map(|patch| format!("{}\n", patch)).collect();
         println!("{}", patch_file);
         let patches2 = Patch::from_multiple(&patch_file).unwrap_or_else(|err| {
@@ -51,10 +52,8 @@ fn parse_wild_samples() {
         let patches = patches.unwrap_or_else(|err| panic!("failed to parse {:?}, error: {}", path, err));
         // Make sure that the patch file we produce parses to the same information as the original
         // patch file.
-        let patch_file: String = patches
-            .iter()
-            .map(|patch| format!("{}\n", patch))
-            .collect();
+        #[allow(clippy::format_collect)] // Display::fmt is the only way to resolve Patch->str
+        let patch_file: String = patches.iter().map(|patch| format!("{}\n", patch)).collect();
 
         let patches2 = Patch::from_multiple(&patch_file).unwrap_or_else(|err| {
             panic!(
