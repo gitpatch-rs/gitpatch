@@ -5,61 +5,64 @@ use pretty_assertions::assert_eq;
 
 use gitpatch::Patch;
 
-#[test]
-fn parse_samples() {
-    let samples_path = PathBuf::from(file!()).parent().unwrap().join("samples");
+fn visit_patches<F>(test_dir: &str, extension: &str, f: F)
+where
+    F: Fn(&str, &PathBuf),
+{
+    let samples_path = PathBuf::from(file!()).parent().unwrap().join(test_dir);
     for file in fs::read_dir(samples_path).unwrap() {
         let path = file.unwrap().path();
-        if path.extension().unwrap_or_default() != "diff" {
+        if path.extension().unwrap_or_default() != extension {
             continue;
         }
 
-        let data = fs::read_to_string(dbg!(&path)).unwrap();
-        let patches = Patch::from_multiple(&data)
-            .unwrap_or_else(|err| panic!("failed to parse {:?}, error: {}", path, err));
-
-        // Make sure that the patch file we produce parses to the same information as the original
-        // patch file.
-        #[allow(clippy::format_collect)] // Display::fmt is the only way to resolve Patch->str
-        let patch_file: String = patches.iter().map(|patch| format!("{}\n", patch)).collect();
-        println!("{}", patch_file);
-        let patches2 = Patch::from_multiple(&patch_file).unwrap_or_else(|err| {
-            panic!(
-                "failed to re-parse {:?} after formatting, error: {}",
-                path, err
-            )
-        });
-        assert_eq!(patches, patches2);
+        f(fs::read_to_string(dbg!(&path)).unwrap().as_str(), &path);
     }
+}
+
+// Make sure that the patch file we produce parses to the same information as the original
+// patch file.
+fn verify_patch_roundtrip(data: &str, path: &PathBuf) {
+    let patches = Patch::from_multiple(data)
+        .unwrap_or_else(|err| panic!("failed to parse {:?}, error: {}", path, err));
+
+    #[allow(clippy::format_collect)] // Display::fmt is the only way to resolve Patch->str
+    let patch_file: String = patches.iter().map(|patch| format!("{}\n", patch)).collect();
+    println!("{}", patch_file);
+    let patches2 = Patch::from_multiple(&patch_file).unwrap_or_else(|err| {
+        panic!(
+            "failed to re-parse {:?} after formatting, error: {}",
+            path, err
+        )
+    });
+    assert_eq!(patches, patches2);
+}
+
+#[test]
+fn parse_samples() {
+    visit_patches("samples", "diff", verify_patch_roundtrip);
 }
 
 #[test]
 fn parse_wild_samples() {
-    let samples_path = PathBuf::from(file!())
-        .parent()
-        .unwrap()
-        .join("wild-samples");
-    for file in fs::read_dir(samples_path).unwrap() {
-        let path = file.unwrap().path();
-        if path.extension().unwrap_or_default() != "patch" {
-            continue;
-        }
+    visit_patches("wild-samples", "patch", verify_patch_roundtrip);
+}
 
-        let data = fs::read_to_string(dbg!(&path)).unwrap();
-        let patches = Patch::from_multiple(&data)
-            .unwrap_or_else(|err| panic!("failed to parse {:?}, error: {}", path, err));
+fn expect_parse_failure(data: &str, path: &PathBuf) {
+    println!("Expecting failure reading {:?}", path);
+    assert!(
+        Patch::from_multiple(data).is_err(),
+        "Expected failure parsing {:?}.  Has this been fixed?  \
+         Consider moving it to wild-samples for full regression test",
+        path
+    );
+}
 
-        // Make sure that the patch file we produce parses to the same information as the original
-        // patch file.
-        #[allow(clippy::format_collect)] // Display::fmt is the only way to resolve Patch->str
-        let patch_file: String = patches.iter().map(|patch| format!("{}\n", patch)).collect();
-
-        let patches2 = Patch::from_multiple(&patch_file).unwrap_or_else(|err| {
-            panic!(
-                "failed to re-parse {:?} after formatting, error: {}",
-                path, err
-            )
-        });
-        assert_eq!(patches, patches2);
-    }
+// We have a zoo of known failing examples in wild-samples-fail.
+//
+// If we fix the underlying problem, this test will start to FAIL and patches
+// should be migrated out of the failing list to the wild-samples collection.
+#[test]
+fn parse_failing_wild_samples() {
+    visit_patches("wild-samples-fail", "patch", expect_parse_failure);
 }

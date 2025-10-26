@@ -1,0 +1,5 @@
+Submodule submodule b0007f5..212f9bb:
+  < update README.md with Known Issues section
+  > add --verbose
+  > add --cached
+  > main: return error if we didn't pop

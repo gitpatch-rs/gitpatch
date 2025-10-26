@@ -1,0 +1,2 @@
+# Disable text processing on these wild sample - eg preserve their wild CRLF format
+*.patch -text
