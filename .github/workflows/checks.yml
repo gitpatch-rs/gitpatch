@@ -2,9 +2,9 @@ name: checks
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   # allow manual trigger
   workflow_dispatch:
 
@@ -24,19 +24,17 @@ jobs:
           - 1.87
           - stable
     steps:
-    - uses: actions/checkout@v6
-    - uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: ${{matrix.rust}}
-        override: true
-
-    - name: Build lib
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
-    - name: Build examples
-      run: cargo build --example '*'
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          components: rustfmt, clippy
+          toolchain: ${{matrix.rust}}
+      - name: Build lib
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose
+      - name: Build examples
+        run: cargo build --example '*'
 
   style:
     name: Style checks for ${{matrix.rust}} on ${{matrix.os}}
@@ -47,7 +45,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust:
           - 1.84.1 # pre edition2024
-          - 1.87   # clippy became more picky after this
+          - 1.87 # clippy became more picky after this
           - stable
     steps:
       - uses: actions/checkout@v6
