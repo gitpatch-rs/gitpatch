@@ -1,6 +1,10 @@
 # CHANGELOG
 
 ## [Unreleased]
+### Breaking
+
+- `Patch::from_multiple` no longer returns an error on an input that contains no patches, including an empty string. It instead returns an empty vector.
+
 ### Changed
 
 ## [v0.7]

@@ -95,7 +95,7 @@ pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch<'_>>, ParseErr
 }
 
 fn multiple_patches(input: Input) -> IResult<Input, Vec<Patch>> {
-    many1(patch)(input)
+    many0(patch)(input)
 }
 
 fn patch(input: Input) -> IResult<Input, Patch> {
@@ -421,6 +421,12 @@ mod tests {
         test_parser!(bare("file-name ") -> @("", "file-name ".to_string()));
         test_parser!(bare("file-name\t") -> @("\t", "file-name".to_string()));
         test_parser!(bare("file-name\n") -> @("\n", "file-name".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_empty_input() -> ParseResult<'static, ()> {
+        test_parser!(multiple_patches("") -> @("", Vec::new()));
         Ok(())
     }
 

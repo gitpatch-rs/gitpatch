@@ -81,7 +81,9 @@ impl<'a> Patch<'a> {
     }
 
     /// Attempt to parse as many patches as possible from the given string. This is useful for when
-    /// you have a complete diff of many files. String must contain at least one patch.
+    /// you have a complete diff of many files.
+    ///
+    /// It is not an error if the string contains no patches: this returns an empty vector.
     ///
     /// # Example
     ///
