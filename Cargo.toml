@@ -8,6 +8,7 @@ readme = "README.md"
 keywords = ["patch", "diff", "parse", "nom"]
 license = "MIT"
 edition = "2018"
+rust-version = "1.63" # matches .github/workflows/checks.yml
 
 [dependencies]
 nom = "7.1.0"
