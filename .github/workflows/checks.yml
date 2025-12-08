@@ -30,11 +30,9 @@ jobs:
           components: rustfmt, clippy
           toolchain: ${{matrix.rust}}
       - name: Build lib
-        run: cargo build --verbose
+        run: cargo build --verbose --all-targets --all-features
       - name: Run tests
         run: cargo test --verbose
-      - name: Build examples
-        run: cargo build --example '*'
       - name: fmt
         run: cargo fmt --all -- --check
       - name: clippy
