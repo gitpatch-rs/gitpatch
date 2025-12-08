@@ -23,6 +23,7 @@ jobs:
           - 1.84.1 # pre edition2024
           - 1.87
           - stable
+          - nightly
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@v1
