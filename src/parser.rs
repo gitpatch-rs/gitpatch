@@ -2,13 +2,12 @@ use std::borrow::Cow;
 use std::error::Error;
 
 use chrono::DateTime;
-use nom::combinator::verify;
 use nom::*;
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_until},
     character::complete::{char, digit1, line_ending, none_of, not_line_ending, one_of},
-    combinator::{map, map_opt, not, opt},
+    combinator::{all_consuming, map, map_opt, not, opt, verify},
     error::context,
     multi::{many0, many1},
     sequence::{delimited, preceded, terminated, tuple},
@@ -82,20 +81,15 @@ pub(crate) fn parse_single_patch(s: &str) -> Result<Patch<'_>, ParseError<'_>> {
 
 pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch<'_>>, ParseError<'_>> {
     let (remaining_input, patches) = multiple_patches(Input::new(s))?;
-    // Parser should return an error instead of producing remaining input
-    if !remaining_input.fragment().is_empty() {
-        return Err(ParseError {
-            line: remaining_input.location_line(),
-            offset: remaining_input.location_offset(),
-            fragment: remaining_input.fragment(),
-            kind: nom::error::ErrorKind::Eof,
-        });
-    }
+    debug_assert!(
+        remaining_input.fragment().is_empty(),
+        "all_consuming should not have left over input"
+    );
     Ok(patches)
 }
 
 fn multiple_patches(input: Input) -> IResult<Input, Vec<Patch>> {
-    many0(patch)(input)
+    all_consuming(many0(patch))(input)
 }
 
 fn patch(input: Input) -> IResult<Input, Patch> {
