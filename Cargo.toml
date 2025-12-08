@@ -7,7 +7,7 @@ repository = "https://github.com/gitpatch-rs/gitpatch"
 readme = "README.md"
 keywords = ["patch", "diff", "parse", "nom"]
 license = "MIT"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 nom = "7.1.0"
