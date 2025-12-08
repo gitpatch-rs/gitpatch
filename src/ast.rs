@@ -299,7 +299,7 @@ mod tests {
             range_hint: "",
             lines: vec![],
         };
-        for (input, expected) in vec![
+        for (input, expected) in [
             ("", None),
             (" ", None),
             ("  ", None),
