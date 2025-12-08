@@ -24,8 +24,7 @@ jobs:
           - 1.87
           - stable
     steps:
-    - uses: actions/checkout@v2
-
+    - uses: actions/checkout@v6
     - uses: actions-rs/toolchain@v1
       with:
         profile: minimal
@@ -51,7 +50,7 @@ jobs:
           - 1.87   # clippy became more picky after this
           - stable
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
