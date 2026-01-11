@@ -5,6 +5,8 @@
 
 - `Patch::from_multiple` no longer returns an error on an input that contains no patches, including an empty string. It instead returns an empty vector.
 
+- `Patch` now has an additional `binary` field indicating a "binary files differ" message.
+
 ### Fixed
 - Issue #4: Fixed parsing of “No newline at end of file” markers so they are recognized even when not the final line of a hunk.
 

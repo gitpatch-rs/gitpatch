@@ -14,25 +14,35 @@ pub struct Patch<'a> {
     pub new: File<'a>,
     /// hunks of differences; each hunk shows one area where the files differ
     pub hunks: Vec<Hunk<'a>>,
+
     /// If there was a `No newline at end of file` indicator after the last line of the old version of the file
     pub old_missing_newline: bool,
     /// If there was a `No newline at end of file` indicator after the last line of the new version of the file
     pub new_missing_newline: bool,
+
+    /// True if this patch is between two binary files.
+    ///
+    /// For binary files, `hunks` is empty and the newline indicators are false.
+    pub binary: bool,
 }
 
 impl fmt::Display for Patch<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Display implementations typically hold up the invariant that there is no trailing
         // newline. This isn't enforced, but it allows them to work well with `println!`
-
-        write!(f, "--- {}", self.old)?;
-        write!(f, "\n+++ {}", self.new)?;
-        for (i, hunk) in self.hunks.iter().enumerate() {
-            writeln!(f)?;
-            if i == self.hunks.len() - 1 {
-                hunk.fmt(f, self.old_missing_newline, self.new_missing_newline)?;
-            } else {
-                hunk.fmt(f, false, false)?;
+        if self.binary {
+            assert!(self.hunks.is_empty());
+            write!(f, "Binary files {} and {} differ", self.old, self.new)?;
+        } else {
+            writeln!(f, "--- {}", self.old)?;
+            write!(f, "+++ {}", self.new)?;
+            for (i, hunk) in self.hunks.iter().enumerate() {
+                writeln!(f)?;
+                if i == self.hunks.len() - 1 {
+                    hunk.fmt(f, self.old_missing_newline, self.new_missing_newline)?;
+                } else {
+                    hunk.fmt(f, false, false)?;
+                }
             }
         }
         Ok(())
