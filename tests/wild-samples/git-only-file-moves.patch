@@ -1,0 +1,4 @@
+diff --git a/tests/test-utils/Cargo.toml b/test-utils/Cargo.toml
+similarity index 100%
+rename from tests/test-utils/Cargo.toml
+rename to test-utils/Cargo.toml

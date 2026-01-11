@@ -24,16 +24,14 @@ where
 // patch file.
 fn verify_patch_roundtrip(data: &str, path: &PathBuf) {
     let patches = Patch::from_multiple(data)
-        .unwrap_or_else(|err| panic!("failed to parse {:?}, error: {}", path, err));
+        .unwrap_or_else(|err| panic!("failed to parse {path:?}, error: {err:?}"));
 
-    #[allow(clippy::format_collect)] // Display::fmt is the only way to resolve Patch->str
+    #[allow(clippy::format_collect)] // it's not performance-sensitive
     let patch_file: String = patches.iter().map(|patch| format!("{}\n", patch)).collect();
-    println!("{}", patch_file);
+    println!("Emitting parsed file:\n{}", patch_file);
+
     let patches2 = Patch::from_multiple(&patch_file).unwrap_or_else(|err| {
-        panic!(
-            "failed to re-parse {:?} after formatting, error: {}",
-            path, err
-        )
+        panic!("failed to re-parse {path:?} after formatting, error: {err:?}",)
     });
     assert_eq!(patches, patches2);
 }

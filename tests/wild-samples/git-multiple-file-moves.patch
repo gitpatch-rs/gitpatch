@@ -1,0 +1,20 @@
+diff --git a/tests/test-utils/Cargo.toml b/test-utils/Cargo.toml
+similarity index 100%
+rename from tests/test-utils/Cargo.toml
+rename to test-utils/Cargo.toml
+diff --git a/tests/test-utils/src/io.rs b/test-utils/src/io.rs
+similarity index 100%
+rename from tests/test-utils/src/io.rs
+rename to test-utils/src/io.rs
+diff --git a/tests/test-utils/src/lib.rs b/test-utils/src/lib.rs
+similarity index 100%
+rename from tests/test-utils/src/lib.rs
+rename to test-utils/src/lib.rs
+diff --git a/tests/test-utils/src/read.rs b/test-utils/src/read.rs
+similarity index 100%
+rename from tests/test-utils/src/read.rs
+rename to test-utils/src/read.rs
+diff --git a/tests/test-utils/src/write.rs b/test-utils/src/write.rs
+similarity index 100%
+rename from tests/test-utils/src/write.rs
+rename to test-utils/src/write.rs

@@ -42,7 +42,8 @@ fn crlf_breaks_stuff_17() -> Result<(), ParseError<'static>> {
                 lines: vec![Line::Context("x")],
             }],
             old_missing_newline: false,
-            new_missing_newline: false
+            new_missing_newline: false,
+            binary: false,
         }
     );
     Ok(())

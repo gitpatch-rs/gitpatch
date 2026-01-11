@@ -2,16 +2,19 @@ use std::borrow::Cow;
 use std::error::Error;
 
 use chrono::DateTime;
+use nom::character::complete::{hex_digit1, space1};
+use nom::sequence::separated_pair;
 use nom::*;
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_until},
     character::complete::{char, digit1, line_ending, none_of, not_line_ending, one_of},
-    combinator::{all_consuming, map, map_opt, not, opt, verify},
+    combinator::{all_consuming, map, map_opt, not, opt, recognize, verify},
     error::context,
     multi::{many0, many1},
-    sequence::{delimited, preceded, terminated, tuple},
+    sequence::{delimited, pair, preceded, terminated, tuple},
 };
+use nom_locate::LocatedSpan;
 
 use crate::ast::*;
 
@@ -50,8 +53,8 @@ impl std::fmt::Display for ParseError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
-            "Line {}: Error while parsing: {}",
-            self.line, self.fragment
+            "Line {}: Error while parsing: {:?}: {:?}",
+            self.line, self.fragment, self.kind
         )
     }
 }
@@ -99,10 +102,12 @@ fn multiple_patches(input: Input) -> IResult<Input, Vec<Patch>> {
 }
 
 fn patch(input: Input) -> IResult<Input, Patch> {
-    if let Ok(patch) = binary_files_differ(input) {
+    let (input, _diff_command) = diff_command(input)?;
+    if let Ok(patch) = file_rename_only(input) {
         return Ok(patch);
     }
-    if let Ok(patch) = file_rename_only(input) {
+    let (input, _git_index) = git_index_line(input)?;
+    if let Ok(patch) = binary_files_differ(input) {
         return Ok(patch);
     }
     let (input, files) = headers(input)?;
@@ -126,6 +131,7 @@ fn patch(input: Input) -> IResult<Input, Patch> {
             hunks,
             old_missing_newline,
             new_missing_newline,
+            binary: false,
         },
     ))
 }
@@ -144,7 +150,7 @@ fn binary_files_differ(input: Input) -> IResult<Input, Patch> {
                     .strip_suffix(" differ")
                     .and_then(|s| s.split_once(" and "))
             }),
-            line_ending,
+            many1(line_ending),
         ),
     )(input)?;
     Ok((
@@ -161,18 +167,18 @@ fn binary_files_differ(input: Input) -> IResult<Input, Patch> {
             hunks: Vec::new(),
             old_missing_newline: false,
             new_missing_newline: false,
+            binary: true,
         },
     ))
 }
 
-/// Parse patches with "similarity index 100%", i.e., patches where a file is renamed without any
-/// other change in its diff.
+/// Attempt to match patches with "similarity index 100%", i.e., patches where a file is renamed
+/// without any other change in its diff.
 ///
-/// The `parse` function should handle rename diffs with similary index less than 100%, at least as per the test
+/// The `parse` function should handle rename diffs with similarity index less than 100%, at least as per the test
 /// `parses_file_renames_with_some_diff`.
 fn file_rename_only(input: Input<'_>) -> IResult<Input<'_>, Patch<'_>> {
-    let (rest, _parsed) = take_until("\nsimilarity index 100%\n")(input)?;
-    let (rest, _parsed) = tag("\nsimilarity index 100%\n")(rest)?;
+    let (rest, _parsed) = tag("similarity index 100%\n")(input)?;
 
     let (rest, old_name) = delimited(tag("rename from "), take_until("\n"), line_ending)(rest)?;
 
@@ -192,8 +198,41 @@ fn file_rename_only(input: Input<'_>) -> IResult<Input<'_>, Patch<'_>> {
             hunks: Vec::new(),
             old_missing_newline: false,
             new_missing_newline: false,
+            binary: false,
         },
     ))
+}
+
+/// Parse a diff command line from the input, if one is present.
+///
+/// git inserts e.g.
+/// `diff --git a/file1 b/file2`
+fn diff_command(input: Input<'_>) -> IResult<Input<'_>, Option<LocatedSpan<&'_ str>>> {
+    context(
+        "diff command line",
+        opt(recognize(pair(
+            tag("diff "),
+            terminated(not_line_ending, opt(line_ending)),
+        ))),
+    )(input)
+}
+
+/// Parse a git "index" line from the input, if one is present.
+///
+/// e.g. `index 4805bf6..e807873 100644`
+fn git_index_line(input: Input<'_>) -> IResult<Input<'_>, Option<LocatedSpan<&'_ str>>> {
+    // TODO: We could return the hashes, and maybe more usefully the unix file
+    // mode into the AST.
+    context(
+        "git index line",
+        opt(recognize(tuple((
+            tag("index "),
+            separated_pair(hex_digit1, tag(".."), hex_digit1),
+            space1,
+            digit1,
+            opt(line_ending),
+        )))),
+    )(input)
 }
 
 // Header lines
@@ -766,12 +805,40 @@ mod tests {
             ],
             old_missing_newline: false,
             new_missing_newline: false,
+            binary: false,
         };
 
         test_parser!(patch(sample) -> expected);
 
         assert_eq!(format!("{}\n", expected), sample);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_git_file_rename_without_changes() -> ParseResult<'static, ()> {
+        let sample = "\
+diff --git a/tests/test-utils/Cargo.toml b/test-utils/Cargo.toml
+similarity index 100%
+rename from tests/test-utils/Cargo.toml
+rename to test-utils/Cargo.toml
+";
+        let expected = Patch {
+            old: File {
+                path: "tests/test-utils/Cargo.toml".into(),
+                meta: None,
+            },
+            new: File {
+                path: "test-utils/Cargo.toml".into(),
+                meta: None,
+            },
+            hunks: Vec::new(),
+            old_missing_newline: false,
+            new_missing_newline: false,
+            binary: false,
+        };
+        test_parser!(patch(sample) -> expected);
+        assert_eq!(format!("{expected}\n"), sample);
         Ok(())
     }
 }
