@@ -1,0 +1,7 @@
+# Tell editors to allow whitespace violations in source
+[parse_patch.rs]
+trim_trailing_whitespace = false
+
+# This shouldn't be needed
+[*.{diff,patch}]
+trim_trailing_whitespace = false
