@@ -75,13 +75,14 @@ fn consume_content_line(input: Input<'_>) -> IResult<Input<'_>, (&str, bool)> {
 
 pub(crate) fn parse_single_patch(s: &str) -> Result<Patch<'_>, ParseError<'_>> {
     let (remaining_input, patch) = patch(Input::new(s))?;
-    // Parser should return an error instead of producing remaining input
-    assert!(
-        remaining_input.fragment().is_empty(),
-        "bug: failed to parse entire input. \
-        Remaining: '{}'",
-        remaining_input.fragment()
-    );
+    if !remaining_input.fragment().is_empty() {
+        return Err(ParseError {
+            line: remaining_input.location_line(),
+            offset: 0,
+            fragment: remaining_input.fragment(),
+            kind: nom::error::ErrorKind::Fail,
+        });
+    }
     Ok(patch)
 }
 
