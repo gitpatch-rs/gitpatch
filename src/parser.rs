@@ -12,6 +12,7 @@ use nom::{
     multi::{many0, many1},
     sequence::{delimited, preceded, terminated, tuple},
 };
+use nom_locate::LocatedSpan;
 
 use crate::ast::*;
 
@@ -75,14 +76,25 @@ fn consume_content_line(input: Input<'_>) -> IResult<Input<'_>, (&str, bool)> {
 
 pub(crate) fn parse_single_patch(s: &str) -> Result<Patch<'_>, ParseError<'_>> {
     let (remaining_input, patch) = patch(Input::new(s))?;
-    // Parser should return an error instead of producing remaining input
-    assert!(
-        remaining_input.fragment().is_empty(),
-        "bug: failed to parse entire input. \
-        Remaining: '{}'",
-        remaining_input.fragment()
-    );
+    if !remaining_input.fragment().is_empty() {
+        return Err(ParseError {
+            line: remaining_input.location_line(),
+            offset: 0,
+            fragment: remaining_input.fragment(),
+            kind: nom::error::ErrorKind::Fail,
+        });
+    }
     Ok(patch)
+}
+
+pub(crate) fn parse_single_patch_with_remaining(
+    s: &str,
+) -> Result<(Patch<'_>, Option<LocatedSpan<&str>>), ParseError<'_>> {
+    let (remaining_input, patch) = patch(Input::new(s))?;
+    if remaining_input.fragment().is_empty() {
+        return Ok((patch, None));
+    }
+    Ok((patch, Some(remaining_input)))
 }
 
 pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch<'_>>, ParseError<'_>> {
