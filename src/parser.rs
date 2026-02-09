@@ -12,6 +12,7 @@ use nom::{
     multi::{many0, many1},
     sequence::{delimited, preceded, terminated, tuple},
 };
+use nom_locate::LocatedSpan;
 
 use crate::ast::*;
 
@@ -84,6 +85,16 @@ pub(crate) fn parse_single_patch(s: &str) -> Result<Patch<'_>, ParseError<'_>> {
         });
     }
     Ok(patch)
+}
+
+pub(crate) fn parse_single_patch_with_remaining(
+    s: &str,
+) -> Result<(Patch<'_>, Option<LocatedSpan<&str>>), ParseError<'_>> {
+    let (remaining_input, patch) = patch(Input::new(s))?;
+    if remaining_input.fragment().is_empty() {
+        return Ok((patch, None));
+    }
+    Ok((patch, Some(remaining_input)))
 }
 
 pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch<'_>>, ParseError<'_>> {

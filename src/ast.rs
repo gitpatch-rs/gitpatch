@@ -2,8 +2,11 @@ use std::borrow::Cow;
 use std::fmt;
 
 use chrono::{DateTime, FixedOffset};
+use nom_locate::LocatedSpan;
 
-use crate::parser::{parse_multiple_patches, parse_single_patch, ParseError};
+use crate::parser::{
+    parse_multiple_patches, parse_single_patch, parse_single_patch_with_remaining, ParseError,
+};
 
 /// A complete patch summarizing the differences between two files
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -80,6 +83,12 @@ impl<'a> Patch<'a> {
     /// ```
     pub fn from_single(s: &'a str) -> Result<Self, ParseError<'a>> {
         parse_single_patch(s)
+    }
+
+    pub fn from_single_with_remaining(
+        s: &'a str,
+    ) -> Result<(Self, Option<LocatedSpan<&'a str>>), ParseError<'a>> {
+        parse_single_patch_with_remaining(s)
     }
 
     /// Attempt to parse as many patches as possible from the given string. This is useful for when
